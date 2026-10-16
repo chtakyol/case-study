@@ -1,0 +1,26 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+# Use the Android Studio Kotlin code style.
+ktlint_code_style = android_studio
+# Allow Compose-style PascalCase functions, e.g. `@Composable fun HomeScreen()`.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+# `standard:package-name` flags underscores in package names. The namespace
+# `com.cihatakyol.case_study` intentionally keeps one, so the rule is disabled.
+# Remove this line if the package is ever renamed to a single word.
+ktlint_standard_package-name = disabled
+# Allow trailing commas.
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
+max_line_length = 120
+
+[*.{md,yml,yaml}]
+indent_size = 2
