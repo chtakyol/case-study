@@ -26,7 +26,7 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(interceptors: Set<Interceptor>): OkHttpClient = OkHttpClient.Builder()
+    fun provideOkHttpClient(interceptors: Set<@JvmSuppressWildcards Interceptor>): OkHttpClient = OkHttpClient.Builder()
         .apply { interceptors.forEach(::addInterceptor) }
         .build()
 
