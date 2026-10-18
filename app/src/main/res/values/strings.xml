@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">case-study</string>
+    <string name="content_empty_page">No content yet.</string>
+    <string name="choice_mode_single">Single select</string>
+    <string name="choice_mode_multiple">Multi select</string>
+    <string name="choice_selected">Selected: %1$s</string>
+    <string name="image_viewer_title">Image</string>
+    <string name="action_back">Back</string>
 </resources>
