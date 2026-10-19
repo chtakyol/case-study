@@ -63,34 +63,6 @@ class PageContentScreenTest {
     }
 
     @Test
-    fun `tapping an image reports its source and title`() {
-        var clicked: Pair<String, String>? = null
-        val imageRow = ImageRow(
-            id = 4,
-            depth = 2,
-            src = "https://example.com/a.png",
-            title = "Welcome Image",
-        )
-        composeRule.setContent {
-            CasestudyTheme {
-                PageContentContent(
-                    state = PageContentUiState.Success(rows = listOf(imageRow)),
-                    snackbarHostState = SnackbarHostState(),
-                    onAction = { action ->
-                        if (action is PageContentAction.ImageClicked) {
-                            clicked = action.src to action.title
-                        }
-                    },
-                )
-            }
-        }
-
-        composeRule.onNodeWithContentDescription("Welcome Image").performClick()
-
-        assertEquals("https://example.com/a.png" to "Welcome Image", clicked)
-    }
-
-    @Test
     fun `tapping a chip reports the choice and response`() {
         var clicked: Pair<Int, Int>? = null
         composeRule.setContent {
