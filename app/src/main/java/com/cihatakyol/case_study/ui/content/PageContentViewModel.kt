@@ -9,6 +9,7 @@ import com.cihatakyol.case_study.domain.usecase.ObservePagesUseCase
 import com.cihatakyol.case_study.domain.usecase.RefreshPagesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,7 @@ class PageContentViewModel @Inject constructor(
     val uiState: StateFlow<PageContentUiState> = _uiState.asStateFlow()
 
     private var initialized = false
+    private var refreshJob: Job? = null
 
     /** Seeds the state pipeline once: observe the stored pages, then refresh them from the network. */
     @MainThread
@@ -40,11 +42,24 @@ class PageContentViewModel @Inject constructor(
         refresh()
     }
 
+    /** Single entry point for the screen's user actions. */
+    fun onAction(action: PageContentAction) {
+        when (action) {
+            PageContentAction.Refresh -> refresh()
+
+            is PageContentAction.ChoiceClicked -> onChoiceClicked(action.choiceId, action.responseId)
+
+            // Image taps navigate; the screen handles them through its navigation callback.
+            is PageContentAction.ImageClicked -> Unit
+        }
+    }
+
     private fun onPagesChanged(pages: List<Page>) {
-        val selections = (_uiState.value as? PageContentUiState.Success)?.selections.orEmpty()
+        val current = _uiState.value as? PageContentUiState.Success
         _uiState.value = PageContentUiState.Success(
             rows = pages.toContentRows(),
-            selections = selections,
+            selections = current?.selections.orEmpty(),
+            isRefreshing = current?.isRefreshing ?: false,
         )
     }
 
@@ -70,11 +85,33 @@ class PageContentViewModel @Inject constructor(
     }
 
     private fun refresh() {
-        viewModelScope.launch {
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
+            setRefreshing(true)
             when (val result = refreshPages()) {
-                is Result.Success -> Unit
+                is Result.Success -> onRefreshSucceeded()
                 is Result.Error -> onRefreshFailed(result.message ?: REFRESH_ERROR_MESSAGE)
             }
+            setRefreshing(false)
+        }
+    }
+
+    /** Flips the in-flight flag on the states that can show a refresh, leaving `Loading` alone. */
+    private fun setRefreshing(refreshing: Boolean) {
+        _uiState.value = when (val current = _uiState.value) {
+            PageContentUiState.Loading -> current
+            is PageContentUiState.Success -> current.copy(isRefreshing = refreshing)
+            is PageContentUiState.Error -> current.copy(isRefreshing = refreshing)
+        }
+    }
+
+    /**
+     * Recovers from an error state: the SSOT flow replaces this empty success with the refreshed
+     * document as soon as it is stored.
+     */
+    private fun onRefreshSucceeded() {
+        if (_uiState.value is PageContentUiState.Error) {
+            _uiState.value = PageContentUiState.Success(rows = emptyList(), isRefreshing = true)
         }
     }
 

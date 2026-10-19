@@ -11,6 +11,7 @@ import com.cihatakyol.case_study.domain.repository.ContentRepository
 import com.cihatakyol.case_study.domain.usecase.ObservePagesUseCase
 import com.cihatakyol.case_study.domain.usecase.RefreshPagesUseCase
 import java.io.IOException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -93,7 +95,7 @@ class PageContentViewModelTest {
     fun `a failed refresh keeps the displayed content and surfaces a message`() = runTest(dispatcher) {
         val repository = FakeContentRepository(
             pages = listOf(page(id = 1, title = "Main Page")),
-            refreshResult = Result.Error(IOException("boom")),
+            initialRefreshResult = Result.Error(IOException("boom")),
         )
         val viewModel = viewModel(repository)
 
@@ -112,7 +114,7 @@ class PageContentViewModelTest {
     fun `a failed refresh with nothing stored reports an error`() = runTest(dispatcher) {
         val repository = FakeContentRepository(
             pages = emptyList(),
-            refreshResult = Result.Error(IOException("boom")),
+            initialRefreshResult = Result.Error(IOException("boom")),
         )
         val viewModel = viewModel(repository)
 
@@ -190,6 +192,111 @@ class PageContentViewModelTest {
         assertTrue(viewModel.uiState.value.success().selections.isEmpty())
     }
 
+    @Test
+    fun `a manual refresh requests new content and clears the in-flight flag`() = runTest(dispatcher) {
+        val repository = FakeContentRepository(listOf(page(id = 1, title = "Main Page")))
+        val viewModel = viewModel(repository)
+        viewModel.initialize()
+        advanceUntilIdle()
+        repository.refreshCallCount = 0
+
+        viewModel.onAction(PageContentAction.Refresh)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.refreshCallCount)
+        assertEquals(false, viewModel.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun `a manual refresh shows progress while in flight`() = runTest(dispatcher) {
+        val repository = FakeContentRepository(listOf(page(id = 1, title = "Main Page")))
+        val viewModel = viewModel(repository)
+        viewModel.initialize()
+        advanceUntilIdle()
+
+        repository.suspendRefresh = true
+        viewModel.onAction(PageContentAction.Refresh)
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun `a repeated refresh while one is in flight is ignored`() = runTest(dispatcher) {
+        val repository = FakeContentRepository(listOf(page(id = 1, title = "Main Page")))
+        val viewModel = viewModel(repository)
+        viewModel.initialize()
+        advanceUntilIdle()
+        repository.refreshCallCount = 0
+        repository.suspendRefresh = true
+
+        viewModel.onAction(PageContentAction.Refresh)
+        runCurrent()
+        viewModel.onAction(PageContentAction.Refresh)
+        runCurrent()
+
+        assertEquals(1, repository.refreshCallCount)
+        repository.releaseRefresh()
+        advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun `a failed manual refresh with content keeps it and shows a message`() = runTest(dispatcher) {
+        val repository = FakeContentRepository(listOf(page(id = 1, title = "Main Page")))
+        val viewModel = viewModel(repository)
+        viewModel.initialize()
+        advanceUntilIdle()
+
+        repository.refreshResult = Result.Error(IOException("boom"))
+        viewModel.onAction(PageContentAction.Refresh)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value.success()
+        assertEquals(1, state.rows.filterIsInstance<PageHeaderRow>().size)
+        assertEquals(PageContentViewModel.REFRESH_ERROR_MESSAGE, state.userMessage)
+        assertEquals(false, state.isRefreshing)
+    }
+
+    @Test
+    fun `a failed manual refresh with nothing stored keeps the error state`() = runTest(dispatcher) {
+        val repository = FakeContentRepository(pages = emptyList())
+        val viewModel = viewModel(repository)
+        viewModel.initialize()
+        advanceUntilIdle()
+
+        repository.refreshResult = Result.Error(IOException("boom"))
+        viewModel.onAction(PageContentAction.Refresh)
+        advanceUntilIdle()
+
+        assertEquals(
+            PageContentUiState.Error(PageContentViewModel.REFRESH_ERROR_MESSAGE),
+            viewModel.uiState.value,
+        )
+    }
+
+    @Test
+    fun `retrying from the error state recovers when the refresh succeeds`() = runTest(dispatcher) {
+        val repository = FakeContentRepository(
+            pages = emptyList(),
+            initialRefreshResult = Result.Error(IOException("boom")),
+        )
+        val viewModel = viewModel(repository)
+        viewModel.initialize()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is PageContentUiState.Error)
+
+        repository.refreshResult = Result.Success(Unit)
+        viewModel.onAction(PageContentAction.Refresh)
+        advanceUntilIdle()
+
+        repository.emit(listOf(page(id = 1, title = "Main Page")))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value.success()
+        assertEquals(listOf("Main Page"), state.rows.filterIsInstance<PageHeaderRow>().map { it.title })
+    }
+
     private fun PageContentUiState.success(): PageContentUiState.Success {
         require(this is PageContentUiState.Success) { "Expected Success but was $this" }
         return this
@@ -227,18 +334,28 @@ class PageContentViewModelTest {
     )
 }
 
-private class FakeContentRepository(
-    pages: List<Page>,
-    private val refreshResult: Result<Unit> = Result.Success(Unit),
-) : ContentRepository {
+private class FakeContentRepository(pages: List<Page>, initialRefreshResult: Result<Unit> = Result.Success(Unit)) :
+    ContentRepository {
 
     private val pagesFlow = MutableStateFlow(pages)
+    private var refreshGate: CompletableDeferred<Unit>? = null
+
+    var refreshResult: Result<Unit> = initialRefreshResult
 
     var refreshCalled = false
         private set
 
+    var refreshCallCount = 0
+
+    /** When true, `refreshPages` suspends until [releaseRefresh] is called. */
+    var suspendRefresh = false
+
     fun emit(pages: List<Page>) {
         pagesFlow.value = pages
+    }
+
+    fun releaseRefresh() {
+        refreshGate?.complete(Unit)
     }
 
     override fun observePages(): Flow<List<Page>> = pagesFlow
@@ -247,6 +364,12 @@ private class FakeContentRepository(
 
     override suspend fun refreshPages(): Result<Unit> {
         refreshCalled = true
+        refreshCallCount++
+        if (suspendRefresh) {
+            val gate = CompletableDeferred<Unit>()
+            refreshGate = gate
+            gate.await()
+        }
         return refreshResult
     }
 }
