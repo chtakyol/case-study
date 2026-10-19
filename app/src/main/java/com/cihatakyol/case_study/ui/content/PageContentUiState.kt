@@ -5,6 +5,9 @@ import com.cihatakyol.case_study.domain.model.Response
 /** Screen state for the content screen. */
 sealed interface PageContentUiState {
 
+    /** True while a refresh is in flight, so the app bar can show progress. */
+    val isRefreshing: Boolean get() = false
+
     /** Before the stored content has been observed for the first time. */
     data object Loading : PageContentUiState
 
@@ -13,6 +16,7 @@ sealed interface PageContentUiState {
         val rows: List<PageContentRow>,
         val selections: Map<Int, Set<Int>> = emptyMap(),
         val userMessage: String? = null,
+        override val isRefreshing: Boolean = false,
     ) : PageContentUiState {
 
         /** True when nothing is stored, so the empty state is shown. */
@@ -23,7 +27,7 @@ sealed interface PageContentUiState {
     }
 
     /** A refresh failed and nothing is stored. */
-    data class Error(val message: String) : PageContentUiState
+    data class Error(val message: String, override val isRefreshing: Boolean = false) : PageContentUiState
 
     companion object {
         val Preview = Success(

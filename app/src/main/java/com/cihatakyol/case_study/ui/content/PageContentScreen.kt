@@ -5,10 +5,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -22,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,8 +59,12 @@ fun PageContentScreen(
     PageContentContent(
         state = uiState,
         snackbarHostState = snackbarHostState,
-        onImageClick = onImageClick,
-        onChoiceClick = viewModel::onChoiceClicked,
+        onAction = { action ->
+            when (action) {
+                is PageContentAction.ImageClicked -> onImageClick(action.src, action.title)
+                else -> viewModel.onAction(action)
+            }
+        },
         modifier = modifier,
     )
 }
@@ -63,8 +74,7 @@ fun PageContentScreen(
 fun PageContentContent(
     state: PageContentUiState,
     snackbarHostState: SnackbarHostState,
-    onImageClick: (src: String, title: String) -> Unit,
-    onChoiceClick: (choiceId: Int, responseId: Int) -> Unit,
+    onAction: (PageContentAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -76,6 +86,11 @@ fun PageContentContent(
                         text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.titleLarge,
                     )
+                },
+                actions = {
+                    if (state !is PageContentUiState.Loading) {
+                        RefreshAction(isRefreshing = state.isRefreshing, onRefresh = onAction)
+                    }
                 },
             )
         },
@@ -111,13 +126,39 @@ fun PageContentContent(
                             PageContentRowItem(
                                 row = row,
                                 selectedResponseIds = state.selectedResponseIds(row.id),
-                                onImageClick = onImageClick,
-                                onChoiceClick = onChoiceClick,
+                                onImageClick = { src, title ->
+                                    onAction(PageContentAction.ImageClicked(src, title))
+                                },
+                                onChoiceClick = { choiceId, responseId ->
+                                    onAction(PageContentAction.ChoiceClicked(choiceId, responseId))
+                                },
                             )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/** Shows a refresh button, or progress in its place while a refresh is running. */
+@Composable
+private fun RefreshAction(isRefreshing: Boolean, onRefresh: (PageContentAction) -> Unit) {
+    val description = stringResource(R.string.action_refresh)
+    if (isRefreshing) {
+        CircularProgressIndicator(
+            modifier = Modifier
+                .padding(horizontal = 12.dp)
+                .size(24.dp)
+                .semantics { contentDescription = description },
+            strokeWidth = 2.dp,
+        )
+    } else {
+        IconButton(onClick = { onRefresh(PageContentAction.Refresh) }) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = description,
+            )
         }
     }
 }
@@ -139,8 +180,19 @@ private fun PageContentContentPreview() {
         PageContentContent(
             state = PageContentUiState.Preview,
             snackbarHostState = remember { SnackbarHostState() },
-            onImageClick = { _, _ -> },
-            onChoiceClick = { _, _ -> },
+            onAction = {},
+        )
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun PageContentContentRefreshingPreview() {
+    CasestudyTheme {
+        PageContentContent(
+            state = PageContentUiState.Preview.copy(isRefreshing = true),
+            snackbarHostState = remember { SnackbarHostState() },
+            onAction = {},
         )
     }
 }
@@ -152,8 +204,7 @@ private fun PageContentContentEmptyPreview() {
         PageContentContent(
             state = PageContentUiState.PreviewEmpty,
             snackbarHostState = remember { SnackbarHostState() },
-            onImageClick = { _, _ -> },
-            onChoiceClick = { _, _ -> },
+            onAction = {},
         )
     }
 }
@@ -165,8 +216,7 @@ private fun PageContentContentErrorPreview() {
         PageContentContent(
             state = PageContentUiState.PreviewError,
             snackbarHostState = remember { SnackbarHostState() },
-            onImageClick = { _, _ -> },
-            onChoiceClick = { _, _ -> },
+            onAction = {},
         )
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import com.cihatakyol.case_study.domain.model.Response
 import com.cihatakyol.case_study.ui.theme.CasestudyTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -41,8 +43,7 @@ class PageContentScreenTest {
                 PageContentContent(
                     state = state,
                     snackbarHostState = SnackbarHostState(),
-                    onImageClick = { _, _ -> },
-                    onChoiceClick = { _, _ -> },
+                    onAction = {},
                 )
             }
         }
@@ -75,8 +76,11 @@ class PageContentScreenTest {
                 PageContentContent(
                     state = PageContentUiState.Success(rows = listOf(imageRow)),
                     snackbarHostState = SnackbarHostState(),
-                    onImageClick = { src, title -> clicked = src to title },
-                    onChoiceClick = { _, _ -> },
+                    onAction = { action ->
+                        if (action is PageContentAction.ImageClicked) {
+                            clicked = action.src to action.title
+                        }
+                    },
                 )
             }
         }
@@ -94,8 +98,11 @@ class PageContentScreenTest {
                 PageContentContent(
                     state = PageContentUiState.Success(rows = listOf(choiceRow())),
                     snackbarHostState = SnackbarHostState(),
-                    onImageClick = { _, _ -> },
-                    onChoiceClick = { choiceId, responseId -> clicked = choiceId to responseId },
+                    onAction = { action ->
+                        if (action is PageContentAction.ChoiceClicked) {
+                            clicked = action.choiceId to action.responseId
+                        }
+                    },
                 )
             }
         }
@@ -116,11 +123,16 @@ class PageContentScreenTest {
                         selections = selections,
                     ),
                     snackbarHostState = SnackbarHostState(),
-                    onImageClick = { _, _ -> },
-                    onChoiceClick = { choiceId, responseId ->
-                        val current = selections[choiceId].orEmpty()
-                        val updated = if (responseId in current) emptySet() else setOf(responseId)
-                        selections = selections + (choiceId to updated)
+                    onAction = { action ->
+                        if (action is PageContentAction.ChoiceClicked) {
+                            val current = selections[action.choiceId].orEmpty()
+                            val updated = if (action.responseId in current) {
+                                emptySet()
+                            } else {
+                                setOf(action.responseId)
+                            }
+                            selections = selections + (action.choiceId to updated)
+                        }
                     },
                 )
             }
@@ -138,8 +150,7 @@ class PageContentScreenTest {
                 PageContentContent(
                     state = PageContentUiState.Success(rows = listOf(choiceRow(multipleSelection = true))),
                     snackbarHostState = SnackbarHostState(),
-                    onImageClick = { _, _ -> },
-                    onChoiceClick = { _, _ -> },
+                    onAction = {},
                 )
             }
         }
@@ -154,8 +165,7 @@ class PageContentScreenTest {
                 PageContentContent(
                     state = PageContentUiState.Success(rows = emptyList()),
                     snackbarHostState = SnackbarHostState(),
-                    onImageClick = { _, _ -> },
-                    onChoiceClick = { _, _ -> },
+                    onAction = {},
                 )
             }
         }
@@ -170,13 +180,84 @@ class PageContentScreenTest {
                 PageContentContent(
                     state = PageContentUiState.Error("Unable to refresh content."),
                     snackbarHostState = SnackbarHostState(),
-                    onImageClick = { _, _ -> },
-                    onChoiceClick = { _, _ -> },
+                    onAction = {},
                 )
             }
         }
 
         composeRule.onNodeWithText("Unable to refresh content.").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the app bar shows the refresh action with stored content`() {
+        composeRule.setContent {
+            CasestudyTheme {
+                PageContentContent(
+                    state = PageContentUiState.Success(rows = listOf(TextRow(id = 1, depth = 0, content = "Hello"))),
+                    snackbarHostState = SnackbarHostState(),
+                    onAction = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Refresh").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping refresh reports the refresh action`() {
+        var action: PageContentAction? = null
+        composeRule.setContent {
+            CasestudyTheme {
+                PageContentContent(
+                    state = PageContentUiState.Success(rows = listOf(TextRow(id = 1, depth = 0, content = "Hello"))),
+                    snackbarHostState = SnackbarHostState(),
+                    onAction = { action = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Refresh").performClick()
+
+        assertEquals(PageContentAction.Refresh, action)
+    }
+
+    @Test
+    fun `progress replaces the refresh action while refreshing`() {
+        var action: PageContentAction? = null
+        composeRule.setContent {
+            CasestudyTheme {
+                PageContentContent(
+                    state = PageContentUiState.Success(
+                        rows = listOf(TextRow(id = 1, depth = 0, content = "Hello")),
+                        isRefreshing = true,
+                    ),
+                    snackbarHostState = SnackbarHostState(),
+                    onAction = { action = it },
+                )
+            }
+        }
+
+        // The progress indicator carries the same description but is not clickable, so a tap
+        // cannot start a second refresh.
+        composeRule.onNodeWithContentDescription("Refresh").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Refresh").assertHasNoClickAction()
+        composeRule.onNodeWithContentDescription("Refresh").performClick()
+        assertNull(action)
+    }
+
+    @Test
+    fun `the refresh action is available in the error state`() {
+        composeRule.setContent {
+            CasestudyTheme {
+                PageContentContent(
+                    state = PageContentUiState.Error("Unable to refresh content."),
+                    snackbarHostState = SnackbarHostState(),
+                    onAction = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Refresh").assertIsDisplayed()
     }
 
     @Test
