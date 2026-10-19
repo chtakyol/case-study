@@ -41,4 +41,8 @@ Type safe navigation routes.
 Open the project in Android Studio and run the `app` configuration; no API key or backend is needed
 for a debug build.
 
+## High Level Architecture
+
+![High level architecture](arch.jpg)
+
 **Note:** I've also included my skills and prompts for this repository to show my thought process.
