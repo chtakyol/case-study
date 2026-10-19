@@ -41,6 +41,10 @@ Type safe navigation routes.
 Open the project in Android Studio and run the `app` configuration; no API key or backend is needed
 for a debug build.
 
+## Continuous integration
+
+GitHub Actions runs the checks in `.github/workflows/ci.yml` on every push to `master` and on pull
+requests targeting `master`.
 ## High Level Architecture
 
 ![High level architecture](arch.jpg)
