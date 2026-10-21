@@ -41,6 +41,21 @@ Type safe navigation routes.
 Open the project in Android Studio and run the `app` configuration; no API key or backend is needed
 for a debug build.
 
+## Local responses in debug builds
+
+GET requests are handled locally in debug builds when the `USE_FAKE_CONTENT` flag is enabled.
+`FakeContentInterceptor` answers `GET pages` from the bundled `app/src/debug/assets/content_pages.json`
+instead of going to the network, so a freshly installed debug build renders content without a backend.
+Release builds have no such binding, and setting the flag to `false` in `app/build.gradle.kts` restores
+the real HTTP path against `BASE_URL`. Since the fixture ships inside the APK, clearing app data does
+not remove it: the next launch re-seeds Room from the asset.
+
+I followed a similar approach to the one used in the [Now in Android](https://github.com/android/nowinandroid)
+repository, wiring the `FakeContentInterceptor` through `DebugNetworkModule` so it is contributed to the
+OkHttp client's interceptor set via Hilt only in the `debug` source set.
+
+I chose this solution because the base URLs were not real, and we only needed to support JSON responses.
+
 ## Continuous integration
 
 GitHub Actions runs the checks in `.github/workflows/ci.yml` on every push to `master` and on pull
