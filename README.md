@@ -38,23 +38,31 @@ Type safe navigation routes.
 ./gradlew ktlintFormat              # auto-fix style
 ```
 
-Open the project in Android Studio and run the `app` configuration; no API key or backend is needed
-for a debug build.
+Open the project in Android Studio and run the `app` configuration; no API key is needed for a debug
+build, which fetches its content from the public document described below.
+
+## Content source
+
+`BASE_URL` points at a public JSON document
+(`https://gist.githubusercontent.com/aruana-lumiform/383e1291df3e0cc1d49aeb14d45f5b94/raw/`), and
+`ContentApi` requests `lumiform-android-test.json` from it. The document is fetched once, persisted in
+Room, and rendered from the database afterwards. It is a static file on GitHub's CDN, not a service:
+one `GET`, no query parameters, no authentication.
 
 ## Local responses in debug builds
 
-GET requests are handled locally in debug builds when the `USE_FAKE_CONTENT` flag is enabled.
-`FakeContentInterceptor` answers `GET pages` from the bundled `app/src/debug/assets/content_pages.json`
-instead of going to the network, so a freshly installed debug build renders content without a backend.
-Release builds have no such binding, and setting the flag to `false` in `app/build.gradle.kts` restores
-the real HTTP path against `BASE_URL`. Since the fixture ships inside the APK, clearing app data does
-not remove it: the next launch re-seeds Room from the asset.
+The real HTTP path is the default, but `FakeContentInterceptor` can answer the content request from
+`app/src/debug/assets/content_pages.json` instead. Enable it with `USE_FAKE_CONTENT = true` in
+`app/build.gradle.kts` when no network is available, or for a demo that must render instantly. Release
+builds have no such binding. Since the fixture ships inside the APK, clearing app data does not remove
+it: the next launch re-seeds Room from the asset.
 
 I followed a similar approach to the one used in the [Now in Android](https://github.com/android/nowinandroid)
 repository, wiring the `FakeContentInterceptor` through `DebugNetworkModule` so it is contributed to the
 OkHttp client's interceptor set via Hilt only in the `debug` source set.
 
-I chose this solution because the base URLs were not real, and we only needed to support JSON responses.
+The fixture is kept as an offline fallback because the content source is a single static document, and
+the app only needs to support JSON responses.
 
 ## Continuous integration
 
