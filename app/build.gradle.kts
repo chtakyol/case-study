@@ -7,6 +7,9 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
+// Static content document: one GET returning the pages payload, fetched once and persisted in Room.
+val contentBaseUrl = "https://gist.githubusercontent.com/aruana-lumiform/383e1291df3e0cc1d49aeb14d45f5b94/raw/"
+
 android {
     namespace = "com.cihatakyol.case_study"
     compileSdk {
@@ -25,12 +28,12 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
-            // Debug builds answer GET pages from a bundled fixture; set false to hit BASE_URL.
-            buildConfigField("boolean", "USE_FAKE_CONTENT", "true")
+            buildConfigField("String", "BASE_URL", "\"$contentBaseUrl\"")
+            // Set true to answer the content request from the bundled fixture instead of the network.
+            buildConfigField("boolean", "USE_FAKE_CONTENT", "false")
         }
         release {
-            buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
+            buildConfigField("String", "BASE_URL", "\"$contentBaseUrl\"")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")

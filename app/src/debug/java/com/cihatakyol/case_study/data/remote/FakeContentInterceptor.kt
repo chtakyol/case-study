@@ -7,9 +7,9 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 /**
- * Debug-only interceptor that answers `GET pages` from a bundled fixture, so a debug build renders
- * content even though the configured base URL is a placeholder host. When [isEnabled] is false it
- * passes requests through untouched, letting a developer point at a real server.
+ * Debug-only interceptor that answers the content request from a bundled fixture, so a debug build
+ * renders content even when the configured base URL is unreachable. When [isEnabled] is false it
+ * passes requests through untouched, letting the app hit the real document.
  */
 class FakeContentInterceptor(private val isEnabled: Boolean, private val loadPayload: () -> String) : Interceptor {
 
@@ -32,7 +32,7 @@ class FakeContentInterceptor(private val isEnabled: Boolean, private val loadPay
     companion object {
         const val FIXTURE_ASSET = "content_pages.json"
 
-        private const val CONTENT_PATH = "pages"
+        private const val CONTENT_PATH = "lumiform-android-test.json"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }

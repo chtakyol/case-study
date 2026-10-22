@@ -46,7 +46,21 @@ class ContentApiTest {
 
         assertEquals(2, pages.size)
         assertEquals("Main Page", pages.first().title)
-        assertEquals("/pages", server.takeRequest().path)
+        assertEquals("/lumiform-android-test.json", server.takeRequest().path)
+    }
+
+    @Test
+    fun `deserializes a payload served as plain text`() = runTest {
+        // GitHub serves gist payloads as text/plain, so the converter must not depend on the media type.
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/plain; charset=utf-8")
+                .setBody(sampleContentJson()),
+        )
+
+        val pages = api.getPages()
+
+        assertEquals(2, pages.size)
     }
 
     @Test
